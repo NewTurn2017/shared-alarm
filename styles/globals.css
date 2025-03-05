@@ -1,0 +1,314 @@
+:root {
+  --primary-color: #4a6cf7;
+  --secondary-color: #ff6b6b;
+  --background-color: #f8f9fa;
+  --card-background: #ffffff;
+  --text-color: #333333;
+  --border-color: #e1e5eb;
+  --alarm-ringing-color: #ffeb3b;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  line-height: 1.6;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
+}
+
+button:hover {
+  background-color: #3a5bd9;
+}
+
+.container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 0;
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  font-size: 20px;
+  color: #666;
+}
+
+.welcome {
+  text-align: center;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 40px 20px;
+  background-color: var(--card-background);
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.welcome h1 {
+  margin-bottom: 20px;
+  color: var(--primary-color);
+}
+
+.welcome p {
+  margin-bottom: 30px;
+  color: #666;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 30px;
+}
+
+.create-room-btn {
+  padding: 12px 24px;
+  font-size: 16px;
+  background-color: var(--primary-color);
+}
+
+.divider {
+  margin: 10px 0;
+  color: #999;
+  font-weight: 500;
+}
+
+.join-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.join-form input {
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 16px;
+}
+
+.error-message {
+  color: var(--secondary-color);
+  margin: 10px 0;
+  padding: 10px;
+  background-color: rgba(255, 107, 107, 0.1);
+  border-radius: 4px;
+}
+
+.room-container {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  background-color: var(--card-background);
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.room-header {
+  background-color: var(--primary-color);
+  color: white;
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.room-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.share-button {
+  background-color: white;
+  color: var(--primary-color);
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+.room-content {
+  padding: 20px;
+}
+
+.alarms-section {
+  margin-bottom: 30px;
+}
+
+.alarms-section h3,
+.add-alarm-section h3 {
+  margin-bottom: 15px;
+  color: var(--primary-color);
+  font-size: 20px;
+}
+
+.no-alarms {
+  color: #999;
+  font-style: italic;
+}
+
+.alarms-list {
+  display: grid;
+  gap: 15px;
+}
+
+.alarm-container {
+  display: flex;
+  justify-content: space-between;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid var(--primary-color);
+}
+
+.alarm-container.ringing {
+  animation: pulse 1s infinite alternate;
+  border-left: 4px solid var(--alarm-ringing-color);
+  background-color: rgba(255, 235, 59, 0.2);
+}
+
+@keyframes pulse {
+  from {
+    box-shadow: 0 0 0 rgba(255, 235, 59, 0.4);
+  }
+  to {
+    box-shadow: 0 0 10px rgba(255, 235, 59, 0.8);
+  }
+}
+
+.alarm-details {
+  flex: 1;
+}
+
+.alarm-name {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.alarm-time {
+  color: #666;
+  margin-bottom: 5px;
+  font-size: 14px;
+}
+
+.time-left {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
+.alarm-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+}
+
+.stop-button {
+  background-color: var(--secondary-color);
+}
+
+.stop-button:hover {
+  background-color: #ff5252;
+}
+
+.delete-button {
+  background-color: #999;
+}
+
+.delete-button:hover {
+  background-color: #777;
+}
+
+.alarm-form {
+  background-color: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.add-button {
+  background-color: var(--primary-color);
+  padding: 10px 16px;
+  font-size: 16px;
+  margin-top: 10px;
+}
+
+.footer {
+  text-align: center;
+  padding: 20px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+/* Responsive Layout */
+@media (max-width: 768px) {
+  .room-header {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+
+  .room-info {
+    flex-direction: column;
+  }
+
+  .alarm-container {
+    flex-direction: column;
+  }
+
+  .alarm-actions {
+    margin-top: 15px;
+    flex-direction: row;
+  }
+}
