@@ -182,6 +182,8 @@ const io = new Server(server, {
       'http://localhost:3001',
       'http://localhost:3002',
       'https://shared-alarm-qs8seieeq-codewithgenie.vercel.app',
+      'https://shared-alarm-socket.onrender.com',
+      'https://shared-alarm.vercel.app',
     ],
     methods: ['GET', 'POST'],
     credentials: true,
@@ -206,8 +208,16 @@ const USER_DISCONNECT_TIMEOUT = 30 * 1000
 // 서버 활성 유지를 위한 자체 핑 기능
 setInterval(() => {
   try {
-    http.get(`http://localhost:${process.env.PORT || 4000}/ping`, (res) => {
-      console.log('자체 핑: 서버 활성 유지 중...', new Date().toISOString())
+    const pingUrl = `${
+      process.env.RENDER_EXTERNAL_URL ||
+      `http://localhost:${process.env.PORT || 4000}`
+    }/ping`
+    http.get(pingUrl, (res) => {
+      console.log(
+        '자체 핑: 서버 활성 유지 중...',
+        new Date().toISOString(),
+        pingUrl
+      )
     })
   } catch (error) {
     console.error('자체 핑 실패:', error)
