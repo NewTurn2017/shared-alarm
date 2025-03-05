@@ -1,92 +1,131 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'
 
 const AlarmTimer = ({ alarm, onDelete }) => {
-  const [timeLeft, setTimeLeft] = useState('');
-  const [isRinging, setIsRinging] = useState(false);
-  const [audio, setAudio] = useState(null);
+  const [timeLeft, setTimeLeft] = useState({})
+  const [isRinging, setIsRinging] = useState(false)
+  const [audio, setAudio] = useState(null)
 
   useEffect(() => {
-    // Create audio object for alarm sound
-    const alarmSound = new Audio('/alarm-sound.mp3');
-    alarmSound.loop = true;
-    setAudio(alarmSound);
+    // 오디오 객체 생성
+    const audioObj = new Audio('/alarm-sound.mp3')
+    audioObj.loop = true
+    setAudio(audioObj)
 
+    // 컴포넌트가 언마운트될 때 오디오 정리
     return () => {
-      if (alarmSound) {
-        alarmSound.pause();
-        alarmSound.currentTime = 0;
+      if (audioObj) {
+        audioObj.pause()
+        audioObj.currentTime = 0
       }
-    };
-  }, []);
+    }
+  }, [])
 
   useEffect(() => {
     const calculateTimeLeft = () => {
-      const targetTime = new Date(alarm.time).getTime();
-      const now = new Date().getTime();
-      const difference = targetTime - now;
+      const alarmTime = new Date(alarm.time)
+      const now = new Date()
+      const difference = alarmTime - now
 
+      // 알람 시간이 지났는지 확인
       if (difference <= 0) {
-        // Timer has ended
-        if (!isRinging) {
-          setIsRinging(true);
-          if (audio) {
-            audio.play().catch(e => console.error('Error playing alarm:', e));
-          }
+        if (!isRinging && audio) {
+          audio.play()
+          setIsRinging(true)
         }
-        return '00:00:00';
+        return {
+          days: 0,
+          hours: 0,
+          minutes: 0,
+          seconds: 0,
+        }
       }
 
-      // Still counting down
-      const hours = Math.floor(difference / (1000 * 60 * 60));
-      const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+      let timeLeft = {
+        days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
+        minutes: Math.floor((difference / 1000 / 60) % 60),
+        seconds: Math.floor((difference / 1000) % 60),
+      }
 
-      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    };
+      return timeLeft
+    }
 
-    // Update timer every second
-    const timerId = setInterval(() => {
-      setTimeLeft(calculateTimeLeft());
-    }, 1000);
+    // 초기 시간 계산
+    setTimeLeft(calculateTimeLeft())
 
-    // Initial calculation
-    setTimeLeft(calculateTimeLeft());
+    // 1초마다 업데이트
+    const timer = setInterval(() => {
+      setTimeLeft(calculateTimeLeft())
+    }, 1000)
 
-    return () => clearInterval(timerId);
-  }, [alarm.time, audio, isRinging]);
+    // 컴포넌트가 언마운트될 때 타이머 정리
+    return () => clearInterval(timer)
+  }, [alarm.time, audio, isRinging])
 
   const stopAlarm = () => {
     if (audio) {
-      audio.pause();
-      audio.currentTime = 0;
+      audio.pause()
+      audio.currentTime = 0
+      setIsRinging(false)
     }
-    setIsRinging(false);
-  };
+  }
 
-  const handleDelete = () => {
-    stopAlarm();
-    onDelete(alarm.id);
-  };
+  const getTimeLeftString = () => {
+    if (timeLeft.days > 0) {
+      return `${timeLeft.days}일 ${timeLeft.hours}시간 ${timeLeft.minutes}분 ${timeLeft.seconds}초`
+    } else if (timeLeft.hours > 0) {
+      return `${timeLeft.hours}시간 ${timeLeft.minutes}분 ${timeLeft.seconds}초`
+    } else if (timeLeft.minutes > 0) {
+      return `${timeLeft.minutes}분 ${timeLeft.seconds}초`
+    } else {
+      return `${timeLeft.seconds}초`
+    }
+  }
 
   return (
-    <div className={`alarm-container ${isRinging ? 'ringing' : ''}`}>
-      <div className="alarm-details">
-        <h3 className="alarm-name">{alarm.name}</h3>
-        <p className="alarm-time">{new Date(alarm.time).toLocaleString()}</p>
-        <div className="time-left">{timeLeft}</div>
+    <div className={`alarm-item ${isRinging ? 'ringing' : ''}`}>
+      <div className='alarm-details'>
+        <div className='alarm-name'>{alarm.name}</div>
+        <div className='alarm-time'>
+          {isRinging ? (
+            <span className='ringing-text'>지금 울리는 중!</span>
+          ) : (
+            <>
+              <span className='time-left'>{getTimeLeftString()}</span>
+              <span className='scheduled-time'>
+                {new Date(alarm.time).toLocaleString('ko-KR', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true,
+                })}
+              </span>
+            </>
+          )}
+        </div>
       </div>
-      <div className="alarm-actions">
+      <div className='alarm-actions'>
         {isRinging && (
-          <button className="stop-button" onClick={stopAlarm}>
-            Stop Alarm
+          <button className='stop-button' onClick={stopAlarm}>
+            알람 중지
           </button>
         )}
-        <button className="delete-button" onClick={handleDelete}>
-          Delete
+        <button
+          className='delete-button'
+          onClick={() => {
+            if (isRinging) {
+              stopAlarm()
+            }
+            onDelete(alarm.id)
+          }}
+        >
+          {isRinging ? '알람 삭제' : '취소'}
         </button>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default AlarmTimer;
+export default AlarmTimer

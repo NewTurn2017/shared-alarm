@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
-import { initSocket } from '../utils/socket'
+import { io } from 'socket.io-client'
 import Room from '../components/Room'
 
 export default function Home() {
@@ -9,123 +9,198 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [roomId, setRoomId] = useState('')
   const [error, setError] = useState('')
+  const [joinRoomId, setJoinRoomId] = useState('')
   const router = useRouter()
 
-  // Initialize socket connection
+  // 소켓 연결 설정
   useEffect(() => {
-    const setupSocket = async () => {
-      try {
-        const socketInstance = await initSocket()
-        setSocket(socketInstance)
-        setLoading(false)
+    // 소켓 서버 URL - 배포 또는 로컬 환경에 따라 달라짐
+    const socketServerUrl =
+      process.env.NEXT_PUBLIC_SOCKET_SERVER_URL || 'http://localhost:3001'
 
-        // Set up error handling
-        socketInstance.on('error', (errMsg) => {
-          setError(errMsg)
-          setTimeout(() => setError(''), 3000)
-        })
+    const socketIo = io(socketServerUrl, {
+      transports: ['websocket'],
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+    })
 
-        return () => {
-          socketInstance.disconnect()
-        }
-      } catch (err) {
-        console.error('Socket initialization failed:', err)
-        setError('Failed to connect to server')
-        setLoading(false)
-      }
+    socketIo.on('connect', () => {
+      console.log('소켓 서버에 연결됨')
+      setLoading(false)
+      setError('')
+    })
+
+    socketIo.on('connect_error', (err) => {
+      console.error('연결 오류:', err)
+      setError('서버 연결에 실패했습니다. 잠시 후 다시 시도해주세요.')
+      setLoading(false)
+    })
+
+    socketIo.on('error', (errMsg) => {
+      console.error('소켓 오류:', errMsg)
+      setError(errMsg || '오류가 발생했습니다.')
+      setLoading(false)
+    })
+
+    setSocket(socketIo)
+
+    return () => {
+      socketIo.disconnect()
     }
-
-    setupSocket()
   }, [])
 
-  // Check for room ID in URL query
+  // URL에서 roomId 쿼리 파라미터를 확인하여 방에 자동으로 입장
   useEffect(() => {
-    if (router.isReady && router.query.room && socket) {
+    if (router.query.room && socket && socket.connected) {
       joinRoom(router.query.room)
     }
-  }, [router.isReady, router.query, socket])
+  }, [router.query.room, socket])
 
+  // 새 방 생성
   const createRoom = () => {
     if (!socket) return
 
-    socket.emit('create-room')
-    console.log('create-room 이벤트 발생')
+    socket.emit('create-room', {}, (response) => {
+      if (response.success) {
+        const newRoomId = response.roomId
+        setRoomId(newRoomId)
 
-    socket.once('room-created', (newRoomId) => {
-      setRoomId(newRoomId)
-      // Update URL without reloading the page
-      router.push(`?room=${newRoomId}`, undefined, { shallow: true })
+        // URL 업데이트
+        router.push(`/?room=${newRoomId}`, undefined, { shallow: true })
+      } else {
+        setError(response.error || '방 생성에 실패했습니다.')
+      }
     })
   }
 
-  const joinRoom = (id) => {
+  // 기존 방 입장
+  const joinRoom = (roomIdToJoin) => {
     if (!socket) return
 
-    socket.emit('join-room', id)
+    const rId = roomIdToJoin || joinRoomId
+    if (!rId) {
+      setError('방 ID를 입력해주세요.')
+      return
+    }
 
-    socket.once('room-joined', (data) => {
-      setRoomId(data.roomId)
-      // Update component state with room data
-      // The Room component will handle the alarms
+    socket.emit('join-room', { roomId: rId }, (response) => {
+      if (response.success) {
+        setRoomId(rId)
+
+        // URL 업데이트 (입력 필드로 방에 입장한 경우에만)
+        if (!roomIdToJoin) {
+          router.push(`/?room=${rId}`, undefined, { shallow: true })
+        }
+      } else {
+        setError(response.error || '방 입장에 실패했습니다.')
+      }
     })
   }
 
-  const handleJoinRoom = (e) => {
-    e.preventDefault()
-    const id = e.target.roomId.value.trim()
-    if (!id) return
+  // 방 나가기
+  const leaveRoom = () => {
+    if (socket && roomId) {
+      socket.emit('leave-room', { roomId })
+      setRoomId('')
+      router.push('/', undefined, { shallow: true })
+    }
+  }
 
-    joinRoom(id)
+  // 폼 제출 핸들러
+  const handleJoinSubmit = (e) => {
+    e.preventDefault()
+    joinRoom()
+  }
+
+  if (loading) {
+    return (
+      <div className='loading-container'>
+        <div className='loading-spinner'></div>
+        <div className='loading-text'>연결 중...</div>
+      </div>
+    )
   }
 
   return (
     <div className='container'>
       <Head>
-        <title>Shared Alarm Timer</title>
+        <title>게임 알람 - 함께 알람을 설정하고 공유하세요</title>
         <meta
           name='description'
-          content='Share alarm timers with up to 5 people'
+          content='게임 중 알람을 설정하고 팀원들과 함께 공유하는 앱입니다.'
         />
         <link rel='icon' href='/favicon.ico' />
       </Head>
 
-      <main className='main'>
-        {loading ? (
-          <div className='loading'>Loading...</div>
-        ) : roomId ? (
-          <Room socket={socket} roomId={roomId} initialAlarms={[]} />
+      <main>
+        {error && <div className='error-message'>{error}</div>}
+
+        {roomId ? (
+          <Room socket={socket} roomId={roomId} onLeaveRoom={leaveRoom} />
         ) : (
-          <div className='welcome'>
-            <h1>Shared Alarm Timer</h1>
-            <p>
-              Create or join a room to share alarm timers with up to 5 people
+          <div className='welcome-container'>
+            <h1 className='app-title'>게임 타이머</h1>
+            <p className='app-description'>
+              게임 중 필요한 알람을 설정하고 친구들과 함께 공유하세요.
+              <br />
+              스킬 쿨타임, 보스 리젠 시간 등을 효과적으로 관리하세요.
             </p>
 
-            {error && <div className='error-message'>{error}</div>}
+            <div className='actions-container'>
+              <div className='action-card'>
+                <h2>새 방 만들기</h2>
+                <p>새로운 알람 방을 만들고 친구들을 초대하세요.</p>
+                <button
+                  className='create-room-button'
+                  onClick={createRoom}
+                  disabled={!socket}
+                >
+                  새 방 생성
+                </button>
+              </div>
 
-            <div className='actions'>
-              <button className='create-room-btn' onClick={createRoom}>
-                Create New Room
-              </button>
+              <div className='action-card'>
+                <h2>기존 방 입장</h2>
+                <p>친구가 공유한 방 ID로 입장하세요.</p>
+                <form onSubmit={handleJoinSubmit} className='join-form'>
+                  <input
+                    type='text'
+                    value={joinRoomId}
+                    onChange={(e) => setJoinRoomId(e.target.value)}
+                    placeholder='방 ID 입력'
+                    required
+                  />
+                  <button
+                    type='submit'
+                    className='join-room-button'
+                    disabled={!socket}
+                  >
+                    방 입장
+                  </button>
+                </form>
+              </div>
+            </div>
 
-              <div className='divider'>OR</div>
-
-              <form className='join-form' onSubmit={handleJoinRoom}>
-                <input
-                  type='text'
-                  name='roomId'
-                  placeholder='Enter Room ID'
-                  required
-                />
-                <button type='submit'>Join Room</button>
-              </form>
+            <div className='features'>
+              <div className='feature'>
+                <h3>빠른 타이머</h3>
+                <p>버튼 한번으로 1분, 3분, 5분 등 빠른 타이머를 설정하세요.</p>
+              </div>
+              <div className='feature'>
+                <h3>실시간 공유</h3>
+                <p>팀원들과 실시간으로 알람을 공유하고 동기화하세요.</p>
+              </div>
+              <div className='feature'>
+                <h3>게임에 최적화</h3>
+                <p>게임 중 사용하기 편리하도록 설계된 다크 모드 UI입니다.</p>
+              </div>
             </div>
           </div>
         )}
       </main>
 
-      <footer className='footer'>
-        <p>Shared Alarm Timer &copy; {new Date().getFullYear()}</p>
+      <footer>
+        <p>© 2023 게임 타이머 - 모든 게이머를 위한 알람 앱</p>
       </footer>
     </div>
   )
