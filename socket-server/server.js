@@ -138,9 +138,7 @@ app.get('/', (req, res) => {
           <h2>서버 정보</h2>
           <ul>
             <li>Node.js 환경: ${process.version}</li>
-            <li>Socket.IO 버전: ${
-              require('socket.io/package.json').version
-            }</li>
+            <li>Socket.IO 버전: 최신</li>
             <li>서버 포트: ${process.env.PORT || 4000}</li>
             <li>서버 시작 시간: ${new Date().toLocaleString()}</li>
           </ul>
