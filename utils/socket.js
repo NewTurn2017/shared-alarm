@@ -1,10 +1,13 @@
-import { io } from 'socket.io-client';
+import { io } from 'socket.io-client'
 
 export const initSocket = async () => {
   // Ensure the socket server is running
-  await fetch('/api/socket');
-  
-  const socket = io();
+  await fetch('/api/socket')
 
-  return socket;
-};
+  const socket = io('', {
+    path: '/api/socket',
+    addTrailingSlash: false,
+  })
+
+  return socket
+}
