@@ -3,6 +3,7 @@ const http = require('http')
 const { Server } = require('socket.io')
 const cors = require('cors')
 const { v4: uuidv4 } = require('uuid')
+const path = require('path')
 
 const app = express()
 
@@ -18,7 +19,135 @@ app.use((req, res, next) => {
 
 // 기본 라우트
 app.get('/', (req, res) => {
-  res.send('Socket.IO 서버가 실행 중입니다.')
+  res.send(`
+    <html>
+      <head>
+        <title>Socket.IO 서버 상태</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 0; padding: 20px; line-height: 1.6; }
+          .container { max-width: 800px; margin: 0 auto; }
+          h1 { color: #333; }
+          .status { padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+          .online { background-color: #d4edda; color: #155724; }
+          .info { background-color: #cce5ff; color: #004085; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+          ul { margin-bottom: 20px; }
+          .test-area { background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin-top: 20px; }
+          button { background-color: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; }
+          button:hover { background-color: #0069d9; }
+          #messages { margin-top: 20px; padding: 10px; background-color: #f1f1f1; height: 200px; overflow-y: auto; border-radius: 4px; }
+        </style>
+        <script src="/socket.io/socket.io.js"></script>
+        <script>
+          let socket;
+          
+          function connect() {
+            document.getElementById('status').textContent = '연결 중...';
+            
+            // 소켓 연결
+            socket = io();
+            
+            // 연결 이벤트
+            socket.on('connect', () => {
+              document.getElementById('status').textContent = '연결됨: ' + socket.id;
+              document.getElementById('status').className = 'status online';
+              document.getElementById('clientCount').textContent = '연결 정보를 가져오는 중...';
+              socket.emit('get-status');
+            });
+            
+            // 연결 오류 이벤트
+            socket.on('connect_error', (error) => {
+              document.getElementById('status').textContent = '연결 오류: ' + error.message;
+              document.getElementById('status').className = 'status';
+            });
+            
+            // 연결 끊김 이벤트
+            socket.on('disconnect', (reason) => {
+              document.getElementById('status').textContent = '연결 끊김: ' + reason;
+              document.getElementById('status').className = 'status';
+            });
+            
+            // 상태 업데이트 이벤트
+            socket.on('status-update', (data) => {
+              document.getElementById('clientCount').textContent = '활성 연결 수: ' + data.clientsCount;
+              document.getElementById('roomCount').textContent = '활성 방 수: ' + data.roomCount;
+              document.getElementById('uptime').textContent = '서버 가동 시간: ' + data.uptime;
+            });
+            
+            // 방 생성 이벤트
+            socket.on('room-created', (roomId) => {
+              addMessage('방이 생성되었습니다: ' + roomId);
+            });
+            
+            // 오류 이벤트
+            socket.on('error', (message) => {
+              addMessage('오류: ' + message);
+            });
+          }
+          
+          function createRoom() {
+            if (!socket || !socket.connected) {
+              addMessage('소켓이 연결되어 있지 않습니다. 먼저 연결하세요.');
+              return;
+            }
+            
+            socket.emit('create-room');
+            addMessage('방 생성 요청 전송...');
+          }
+          
+          function disconnect() {
+            if (socket) {
+              socket.disconnect();
+              document.getElementById('status').textContent = '연결 끊김 (수동)';
+              document.getElementById('status').className = 'status';
+            }
+          }
+          
+          function addMessage(message) {
+            const messagesDiv = document.getElementById('messages');
+            const messageElement = document.createElement('div');
+            messageElement.textContent = new Date().toLocaleTimeString() + ' - ' + message;
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+          }
+          
+          // 페이지 로드 시 자동 연결
+          window.onload = connect;
+        </script>
+      </head>
+      <body>
+        <div class="container">
+          <h1>Socket.IO 서버 상태</h1>
+          
+          <div id="status" class="status">연결되지 않음</div>
+          
+          <div class="info">
+            <div id="clientCount">활성 연결 수: -</div>
+            <div id="roomCount">활성 방 수: -</div>
+            <div id="uptime">서버 가동 시간: -</div>
+          </div>
+          
+          <h2>서버 정보</h2>
+          <ul>
+            <li>Node.js 환경: ${process.version}</li>
+            <li>Socket.IO 버전: ${
+              require('socket.io/package.json').version
+            }</li>
+            <li>서버 포트: ${process.env.PORT || 4000}</li>
+            <li>서버 시작 시간: ${new Date().toLocaleString()}</li>
+          </ul>
+          
+          <div class="test-area">
+            <h2>연결 테스트</h2>
+            <button onclick="connect()">연결</button>
+            <button onclick="disconnect()">연결 끊기</button>
+            <button onclick="createRoom()">테스트 방 생성</button>
+            
+            <div id="messages"></div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `)
 })
 
 // 상태 확인용 라우트
@@ -32,6 +161,9 @@ app.get('/ping', (req, res) => {
 })
 
 const server = http.createServer(app)
+
+// 서버 시작 시간
+const startTime = new Date()
 
 // Socket.IO 설정
 const io = new Server(server, {
@@ -70,6 +202,18 @@ io.on('connection', (socket) => {
     `사용자 연결됨: ${socket.id}, 전송 방식: ${socket.conn.transport.name}`
   )
   console.log(`현재 활성 연결 수: ${io.engine.clientsCount}`)
+
+  // 서버 상태 요청
+  socket.on('get-status', () => {
+    // 현재 가동 시간 계산
+    const uptime = getUptime(startTime)
+
+    socket.emit('status-update', {
+      clientsCount: io.engine.clientsCount,
+      roomCount: rooms.size,
+      uptime: uptime,
+    })
+  })
 
   // 방 생성
   socket.on('create-room', () => {
@@ -171,6 +315,19 @@ io.on('connection', (socket) => {
     console.log(`사용자 연결 해제: ${socket.id}`)
   })
 })
+
+// 가동 시간을 포맷팅하는 함수
+function getUptime(startTime) {
+  const now = new Date()
+  const diff = now - startTime
+
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+  const seconds = Math.floor((diff % (1000 * 60)) / 1000)
+
+  return `${days}일 ${hours}시간 ${minutes}분 ${seconds}초`
+}
 
 // 서버 시작
 const PORT = process.env.PORT || 4000
