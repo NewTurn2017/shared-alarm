@@ -12,10 +12,29 @@ export const initSocket = async () => {
 
     console.log('소켓 서버 URL:', socketServerUrl)
 
+    // 무료 티어에서는 서버가 슬립 모드일 수 있으므로, 먼저 헬스 체크를 통해 깨웁니다
+    try {
+      console.log('서버 웨이크업 시도 중...')
+      const response = await fetch(`${socketServerUrl}/health`)
+
+      if (response.ok) {
+        console.log('서버가 응답합니다. 연결을 시도합니다.')
+      } else {
+        console.log('서버 응답이 좋지 않습니다. 그래도 연결을 시도합니다.')
+      }
+    } catch (error) {
+      console.log(
+        '서버 웨이크업 중 오류 발생. 그래도 연결을 시도합니다.',
+        error
+      )
+    }
+
     const socket = io(socketServerUrl, {
       transports: ['websocket', 'polling'],
-      reconnectionAttempts: 5,
-      timeout: 10000,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 5000, // 재연결 시도 사이의 지연시간 증가
+      timeout: 20000, // 타임아웃 증가
+      autoConnect: true,
     })
 
     socket.on('connect', () => {

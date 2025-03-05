@@ -9,6 +9,13 @@ const app = express()
 // CORS 설정
 app.use(cors())
 
+// 핑-퐁 활성화를 위한 미들웨어 추가
+app.use((req, res, next) => {
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('Keep-Alive', 'timeout=120')
+  next()
+})
+
 // 기본 라우트
 app.get('/', (req, res) => {
   res.send('Socket.IO 서버가 실행 중입니다.')
@@ -17,6 +24,11 @@ app.get('/', (req, res) => {
 // 상태 확인용 라우트
 app.get('/health', (req, res) => {
   res.status(200).send('OK')
+})
+
+// 서버가 스핀다운되지 않도록 유지하는 핑 엔드포인트
+app.get('/ping', (req, res) => {
+  res.status(200).send('pong')
 })
 
 const server = http.createServer(app)
@@ -31,11 +43,26 @@ const io = new Server(server, {
     methods: ['GET', 'POST'],
     credentials: true,
   },
+  // 무료 티어에 최적화된 설정
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  connectTimeout: 30000,
 })
 
 // 방 데이터 저장
 const rooms = new Map()
 const MAX_USERS_PER_ROOM = 5
+
+// 서버 활성 유지를 위한 자체 핑 기능
+setInterval(() => {
+  try {
+    http.get(`http://localhost:${process.env.PORT || 4000}/ping`, (res) => {
+      console.log('자체 핑: 서버 활성 유지 중...', new Date().toISOString())
+    })
+  } catch (error) {
+    console.error('자체 핑 실패:', error)
+  }
+}, 5 * 60 * 1000) // 5분마다
 
 // Socket.IO 이벤트 핸들링
 io.on('connection', (socket) => {
