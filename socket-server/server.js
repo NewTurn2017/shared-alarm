@@ -250,6 +250,7 @@ io.on('connection', (socket) => {
     rooms.set(roomId, {
       users: [socket.id],
       alarms: [],
+      createdAt: new Date().toISOString(),
     })
 
     socket.join(roomId)
@@ -272,6 +273,69 @@ io.on('connection', (socket) => {
     }
 
     console.log(`방 생성됨: ${roomId}`)
+  })
+
+  // 특정 ID로 방 생성
+  socket.on('create-room-with-id', (data, callback) => {
+    console.log('특정 ID로 방 생성 요청 받음:', data)
+    console.log('콜백 함수 유형:', typeof callback)
+
+    const roomId = data.roomId || uuidv4().substring(0, 8)
+
+    // 이미 존재하는 방인지 확인
+    if (rooms.has(roomId)) {
+      console.log(`방 ID '${roomId}'는 이미 존재합니다.`)
+
+      if (callback && typeof callback === 'function') {
+        try {
+          callback({
+            success: false,
+            error: '이미 존재하는 방 ID입니다.',
+          })
+        } catch (error) {
+          console.error('콜백 함수 호출 중 오류:', error)
+          socket.emit('error', '방 생성 응답 중 오류가 발생했습니다.')
+        }
+      } else {
+        socket.emit('error', '이미 존재하는 방 ID입니다.')
+      }
+      return
+    }
+
+    // 새 방 생성
+    rooms.set(roomId, {
+      users: [socket.id],
+      alarms: [],
+      createdAt: new Date().toISOString(),
+    })
+
+    socket.join(roomId)
+
+    // 사용자 정보 저장
+    users.set(socket.id, {
+      socketId: socket.id,
+      roomId: roomId,
+      joinedAt: new Date().toISOString(),
+    })
+
+    if (callback && typeof callback === 'function') {
+      console.log('콜백 함수 호출 준비:', roomId)
+      try {
+        callback({
+          success: true,
+          roomId: roomId,
+        })
+        console.log('콜백 함수 호출 완료')
+      } catch (error) {
+        console.error('콜백 함수 호출 중 오류:', error)
+        socket.emit('error', '방 생성 완료 응답 중 오류가 발생했습니다.')
+      }
+    } else {
+      console.log('콜백 함수 없음, 이벤트로 응답:', roomId)
+      socket.emit('room-created', roomId)
+    }
+
+    console.log(`특정 ID로 방 생성됨: ${roomId}`)
   })
 
   // 방 참가
