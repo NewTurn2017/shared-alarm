@@ -8,7 +8,16 @@ const path = require('path')
 const app = express()
 
 // CORS 설정
-app.use(cors())
+app.use(
+  cors({
+    origin: [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
+    ],
+    credentials: true,
+  })
+)
 
 // 핑-퐁 활성화를 위한 미들웨어 추가
 app.use((req, res, next) => {
@@ -170,10 +179,13 @@ const io = new Server(server, {
   cors: {
     origin: [
       'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
       'https://shared-alarm-qs8seieeq-codewithgenie.vercel.app',
     ],
     methods: ['GET', 'POST'],
     credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization'],
   },
   // 무료 티어에 최적화된 설정
   pingTimeout: 60000,
@@ -183,7 +195,13 @@ const io = new Server(server, {
 
 // 방 데이터 저장
 const rooms = new Map()
+// 소켓 ID와 사용자 정보를 매핑하는 Map
+const users = new Map()
+// 방을 떠난 사용자의 타이머를 추적하는 Map
+const disconnectTimers = new Map()
 const MAX_USERS_PER_ROOM = 5
+// 사용자의 소켓이 끊어진 후 방에서 제거하기까지 기다리는 시간 (30초)
+const USER_DISCONNECT_TIMEOUT = 30 * 1000
 
 // 서버 활성 유지를 위한 자체 핑 기능
 setInterval(() => {
@@ -203,6 +221,14 @@ io.on('connection', (socket) => {
   )
   console.log(`현재 활성 연결 수: ${io.engine.clientsCount}`)
 
+  // 재연결된 사용자 처리
+  const existingTimer = disconnectTimers.get(socket.id)
+  if (existingTimer) {
+    console.log(`사용자 ${socket.id}가 재연결되었습니다. 타이머 취소.`)
+    clearTimeout(existingTimer)
+    disconnectTimers.delete(socket.id)
+  }
+
   // 서버 상태 요청
   socket.on('get-status', () => {
     // 현재 가동 시간 계산
@@ -216,7 +242,10 @@ io.on('connection', (socket) => {
   })
 
   // 방 생성
-  socket.on('create-room', () => {
+  socket.on('create-room', (data, callback) => {
+    console.log('방 생성 요청 받음:', data)
+    console.log('콜백 함수 유형:', typeof callback)
+
     const roomId = uuidv4().substring(0, 8)
     rooms.set(roomId, {
       users: [socket.id],
@@ -224,36 +253,128 @@ io.on('connection', (socket) => {
     })
 
     socket.join(roomId)
-    socket.emit('room-created', roomId)
+
+    if (callback && typeof callback === 'function') {
+      console.log('콜백 함수 호출 준비:', roomId)
+      try {
+        callback({
+          success: true,
+          roomId: roomId,
+        })
+        console.log('콜백 함수 호출 완료')
+      } catch (error) {
+        console.error('콜백 함수 호출 중 오류:', error)
+        socket.emit('error', '방 생성 완료 응답 중 오류가 발생했습니다.')
+      }
+    } else {
+      console.log('콜백 함수 없음, 이벤트로 응답:', roomId)
+      socket.emit('room-created', roomId)
+    }
+
     console.log(`방 생성됨: ${roomId}`)
   })
 
   // 방 참가
-  socket.on('join-room', (roomId) => {
-    const room = rooms.get(roomId)
+  socket.on('join-room', (data, callback) => {
+    console.log('방 입장 요청 받음:', data)
+    console.log('콜백 함수 유형:', typeof callback)
 
+    const roomId = data.roomId
+
+    let room = rooms.get(roomId)
+
+    // 방이 존재하지 않는 경우 자동으로 생성
     if (!room) {
-      socket.emit('error', '방을 찾을 수 없습니다')
-      return
+      console.log('존재하지 않는 방을 자동으로 생성합니다:', roomId)
+      room = {
+        users: [],
+        alarms: [],
+        createdAt: new Date().toISOString(), // 방 생성 시간 기록
+      }
+      rooms.set(roomId, room)
     }
 
     if (room.users.length >= MAX_USERS_PER_ROOM) {
-      socket.emit('error', '방이 가득 찼습니다')
+      console.log('방이 가득 참:', roomId)
+      if (callback && typeof callback === 'function') {
+        callback({
+          success: false,
+          error: '방이 가득 찼습니다',
+        })
+      } else {
+        socket.emit('error', '방이 가득 찼습니다')
+      }
       return
     }
 
-    room.users.push(socket.id)
+    // 사용자 정보 저장
+    users.set(socket.id, {
+      socketId: socket.id,
+      roomId: roomId,
+      joinedAt: new Date().toISOString(),
+    })
+
+    // 이미 방에 참여한 사용자인지 확인
+    if (!room.users.includes(socket.id)) {
+      room.users.push(socket.id)
+    }
     socket.join(roomId)
 
-    // 새 사용자에게 현재 알람 전송
-    socket.emit('room-joined', {
-      roomId,
+    // 응답 데이터 준비
+    const responseData = {
+      roomId: roomId,
       alarms: room.alarms,
-    })
+    }
+
+    // 새 사용자에게 현재 알람 전송
+    if (callback && typeof callback === 'function') {
+      console.log('콜백 함수로 방 입장 응답 전송:', roomId)
+      try {
+        callback({
+          success: true,
+          ...responseData,
+        })
+      } catch (error) {
+        console.error('콜백 함수 호출 중 오류:', error)
+        // 콜백 실패시 이벤트로 전송 시도
+        socket.emit('room-joined', responseData)
+      }
+    } else {
+      console.log('이벤트로 방 입장 응답 전송:', roomId)
+      socket.emit('room-joined', responseData)
+    }
 
     // 다른 사용자에게 알림
     socket.to(roomId).emit('user-joined', socket.id)
+
+    // 방 사용자 수 업데이트
+    io.to(roomId).emit('user-count', room.users.length)
+
     console.log(`사용자 ${socket.id}가 방 ${roomId}에 참가함`)
+    console.log(`방 ${roomId}의 현재 사용자 수: ${room.users.length}`)
+  })
+
+  // 방 나가기
+  socket.on('leave-room', ({ roomId }) => {
+    const room = rooms.get(roomId)
+
+    if (room) {
+      const index = room.users.indexOf(socket.id)
+
+      if (index !== -1) {
+        room.users.splice(index, 1)
+        socket.leave(roomId)
+
+        // 방 사용자 수 업데이트
+        io.to(roomId).emit('user-count', room.users.length)
+
+        // 방이 비어있으면 삭제
+        if (room.users.length === 0) {
+          rooms.delete(roomId)
+          console.log(`방 ${roomId} 삭제됨 (모든 사용자 퇴장)`)
+        }
+      }
+    }
   })
 
   // 알람 추가
@@ -296,19 +417,52 @@ io.on('connection', (socket) => {
 
   // 연결 해제
   socket.on('disconnect', () => {
-    // 사용자가 참가한 모든 방에서 제거
-    for (const [roomId, room] of rooms.entries()) {
-      const index = room.users.indexOf(socket.id)
+    const user = users.get(socket.id)
 
-      if (index !== -1) {
-        room.users.splice(index, 1)
-        socket.to(roomId).emit('user-left', socket.id)
+    if (user) {
+      const roomId = user.roomId
+      const room = rooms.get(roomId)
 
-        // 방이 비어있으면 삭제
-        if (room.users.length === 0) {
-          rooms.delete(roomId)
-          console.log(`방 ${roomId} 삭제됨`)
-        }
+      if (room) {
+        console.log(
+          `사용자 ${socket.id}의 연결이 끊어졌습니다. 30초 후에 방에서 제거합니다.`
+        )
+
+        // 타이머 설정
+        const timer = setTimeout(() => {
+          const room = rooms.get(roomId)
+          if (room) {
+            const index = room.users.indexOf(socket.id)
+            if (index !== -1) {
+              room.users.splice(index, 1)
+              io.to(roomId).emit('user-left', socket.id)
+
+              // 방 사용자 수 업데이트
+              io.to(roomId).emit('user-count', room.users.length)
+
+              // 방이 비어있으면 삭제
+              if (room.users.length === 0) {
+                rooms.delete(roomId)
+                console.log(`방 ${roomId} 삭제됨 (모든 사용자 퇴장)`)
+              } else {
+                console.log(
+                  `방 ${roomId}의 현재 사용자 수: ${room.users.length}`
+                )
+              }
+            }
+          }
+
+          // 사용자 정보 삭제
+          users.delete(socket.id)
+          disconnectTimers.delete(socket.id)
+
+          console.log(
+            `사용자 ${socket.id}가 방 ${roomId}에서 제거됨 (재연결 없음)`
+          )
+        }, USER_DISCONNECT_TIMEOUT)
+
+        // 타이머 저장
+        disconnectTimers.set(socket.id, timer)
       }
     }
 
