@@ -537,7 +537,7 @@ export default function Home() {
       </main>
 
       <footer>
-        <p>© 2023 게임 타이머 - 모든 게이머를 위한 알람 앱</p>
+        <p>© 2025 made by genie - 모든 게이머를 위한 알람 앱</p>
       </footer>
     </div>
   )
